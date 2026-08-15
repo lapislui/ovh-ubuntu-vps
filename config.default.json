@@ -1,0 +1,39 @@
+{
+  "quickCommands": [
+    {
+      "id": "sysinfo",
+      "name": "System Info & Uptime",
+      "cmd": "uname -a && uptime"
+    },
+    {
+      "id": "disk",
+      "name": "Disk Usage (df -h)",
+      "cmd": "df -h"
+    },
+    {
+      "id": "ram",
+      "name": "Memory Usage (free -m)",
+      "cmd": "free -h"
+    },
+    {
+      "id": "docker_ps",
+      "name": "Docker Containers",
+      "cmd": "docker ps -a 2>/dev/null || echo 'Docker not running or not installed'"
+    },
+    {
+      "id": "system_services",
+      "name": "Failed Systemd Services",
+      "cmd": "systemctl --failed"
+    },
+    {
+      "id": "open_ports",
+      "name": "Listening Ports",
+      "cmd": "ss -tulpn || netstat -tulpn"
+    },
+    {
+      "id": "top_cpu",
+      "name": "Top 10 CPU Processes",
+      "cmd": "ps aux --sort=-%cpu | head -n 11"
+    }
+  ]
+}

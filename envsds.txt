@@ -1,0 +1,9 @@
+# VPS SSH Credentials Configuration
+PORT=3001
+VPS_HOST=51.79.160.129
+VPS_PORT=22
+VPS_USER=ubuntu
+VPS_PASSWORD=me@me
+# Or path to private key file (e.g. C:/Users/Keval/.ssh/id_rsa or ./id_rsa)
+VPS_PRIVATE_KEY_PATH=
+VPS_PASSPHRASE=

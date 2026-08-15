@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OVH VPS Remote Manager & SFTP Explorer</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Xterm.js for Interactive Web Terminal -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- LOGIN / CONNECT OVERLAY SCREEN -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-brand-icon">
+          <i class="fa-solid fa-server"></i>
+        </div>
+        <h2>OVH VPS Login</h2>
+        <p>Enter your VPS details and credentials to connect</p>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label for="loginHost"><i class="fa-solid fa-network-wired"></i> Server IP / Host *</label>
+            <input type="text" id="loginHost" placeholder="e.g. 51.79.160.129" required autocomplete="off">
+          </div>
+          <div class="form-group flex-1">
+            <label for="loginPort"><i class="fa-solid fa-hashtag"></i> Port *</label>
+            <input type="number" id="loginPort" value="22" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="loginUser"><i class="fa-solid fa-user"></i> SSH Username *</label>
+          <input type="text" id="loginUser" placeholder="ubuntu or root" value="ubuntu" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label><i class="fa-solid fa-shield-halved"></i> Authentication Method</label>
+          <div class="radio-group">
+            <label class="radio-card">
+              <input type="radio" name="loginAuthType" value="password" checked id="loginAuthPass">
+              <div class="radio-body">
+                <i class="fa-solid fa-key"></i>
+                <span>Password</span>
+              </div>
+            </label>
+            <label class="radio-card">
+              <input type="radio" name="loginAuthType" value="key" id="loginAuthKey">
+              <div class="radio-body">
+                <i class="fa-solid fa-file-shield"></i>
+                <span>Private Key</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Password Field -->
+        <div class="auth-section" id="loginSectionPass">
+          <div class="form-group">
+            <label for="loginPassword"><i class="fa-solid fa-lock"></i> SSH Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password">
+              <button type="button" class="btn-toggle-pwd" id="btnLoginTogglePass">
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Fields -->
+        <div class="auth-section" id="loginSectionKey" style="display: none;">
+          <div class="form-group">
+            <label for="loginKeyPath"><i class="fa-solid fa-file-lines"></i> Private Key File Path</label>
+            <input type="text" id="loginKeyPath" placeholder="e.g. C:\Users\Keval\.ssh\id_rsa">
+          </div>
+          <div class="form-group">
+            <label for="loginPassphrase"><i class="fa-solid fa-shield"></i> Key Passphrase (optional)</label>
+            <input type="password" id="loginPassphrase" placeholder="Passphrase">
+          </div>
+        </div>
+
+        <div class="remember-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="loginRemember" checked>
+            <span>Save credentials for future sessions</span>
+          </label>
+        </div>
+
+        <div class="login-feedback" id="loginFeedback" style="display: none;"></div>
+
+        <button type="submit" class="btn-login" id="btnLoginSubmit">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Connect & Open Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN APP DASHBOARD -->
+  <div class="app-layout" id="appLayout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-server"></i>
+        </div>
+        <div class="brand-text">
+          <h2>OVH VPS</h2>
+          <span>Remote Manager</span>
+        </div>
+      </div>
+
+      <!-- Server Status Badge -->
+      <div class="vps-status-card" id="statusCard">
+        <div class="status-indicator online" id="statusIndicator"></div>
+        <div class="status-info">
+          <span class="status-title" id="statusTitle">Connected</span>
+          <span class="status-subtitle" id="statusSubtitle">ubuntu@51.79.160.129</span>
+        </div>
+        <button class="icon-btn-mini" id="btnQuickTest" title="Re-test Connection">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="tab-terminal">
+          <i class="fa-solid fa-terminal"></i>
+          <span>Live Terminal</span>
+        </button>
+        <button class="nav-item" data-tab="tab-sftp">
+          <i class="fa-solid fa-folder-tree"></i>
+          <span>SFTP Files</span>
+        </button>
+        <button class="nav-item" data-tab="tab-commands">
+          <i class="fa-solid fa-bolt"></i>
+          <span>Quick Commands</span>
+        </button>
+        <button class="nav-item" data-tab="tab-stats">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>System Stats</span>
+        </button>
+        <button class="nav-item" data-tab="tab-settings">
+          <i class="fa-solid fa-sliders"></i>
+          <span>Connection Settings</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <button class="btn-logout" id="btnSidebarLogout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          <span>Switch Server / Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Bar Header -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="pageTitle">Live Terminal</h1>
+          <span class="breadcrumb-sub" id="pageSubtitle">Direct interactive SSH shell to your Ubuntu VPS</span>
+        </div>
+        <div class="topbar-right">
+          <div class="profile-badge">
+            <i class="fa-solid fa-user-shield"></i>
+            <span id="activeUserBadge">ubuntu@51.79.160.129</span>
+          </div>
+          <button class="btn-secondary-sm" id="btnHeaderLogout" title="Change server login">
+            <i class="fa-solid fa-power-off"></i>
+            <span>Switch VPS</span>
+          </button>
+          <button class="btn-primary-sm" id="btnHeaderConnect" title="Reconnect terminal session">
+            <i class="fa-solid fa-plug"></i>
+            <span>Reconnect</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB 1: LIVE TERMINAL -->
+      <section class="tab-pane active" id="tab-terminal">
+        <div class="terminal-container-wrapper">
+          <div class="terminal-toolbar">
+            <div class="terminal-status">
+              <span class="pulse-dot online" id="terminalDot"></span>
+              <span id="terminalStatusText">Connected</span>
+            </div>
+            <div class="terminal-actions">
+              <button class="term-btn" id="btnTermCtrlC" title="Send Interrupt (Ctrl+C)">
+                <i class="fa-solid fa-stop"></i> Ctrl+C
+              </button>
+              <button class="term-btn" id="btnTermClear" title="Clear screen">
+                <i class="fa-solid fa-eraser"></i> Clear
+              </button>
+              <button class="term-btn" id="btnTermFullscreen" title="Toggle Fullscreen">
+                <i class="fa-solid fa-expand"></i> Fullscreen
+              </button>
+              <button class="term-btn highlight" id="btnTermReconnect" title="Reconnect Shell">
+                <i class="fa-solid fa-arrows-rotate"></i> Reconnect
+              </button>
+            </div>
+          </div>
+          <div id="terminal-container" class="terminal-view"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: SFTP FILE EXPLORER -->
+      <section class="tab-pane" id="tab-sftp">
+        <div class="sftp-panel">
+          <!-- SFTP Explorer Toolbar -->
+          <div class="sftp-toolbar">
+            <div class="sftp-nav-buttons">
+              <button class="action-btn" id="btnSftpHome" title="Home Folder (/home/ubuntu)">
+                <i class="fa-solid fa-house"></i>
+              </button>
+              <button class="action-btn" id="btnSftpUp" title="Up One Level">
+                <i class="fa-solid fa-turn-up"></i>
+              </button>
+              <button class="action-btn" id="btnSftpRefresh" title="Refresh">
+                <i class="fa-solid fa-rotate-right"></i>
+              </button>
+            </div>
+
+            <!-- Path Bar -->
+            <div class="path-bar-container">
+              <i class="fa-solid fa-folder-open path-icon"></i>
+              <input type="text" id="sftpCurrentPath" value="/home/ubuntu" spellcheck="false">
+              <button class="btn-path-go" id="btnSftpGoPath">Go</button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="sftp-actions">
+              <label class="action-btn-primary" for="fileUploadInput" title="Upload files">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Upload
+                <input type="file" id="fileUploadInput" multiple style="display:none">
+              </label>
+              <button class="action-btn" id="btnSftpNewFolder" title="Create New Folder">
+                <i class="fa-solid fa-folder-plus"></i> New Folder
+              </button>
+              <button class="action-btn" id="btnSftpNewFile" title="Create New File">
+                <i class="fa-solid fa-file-circle-plus"></i> New File
+              </button>
+            </div>
+          </div>
+
+          <!-- Drop Zone / Upload Notification -->
+          <div class="drop-zone" id="sftpDropZone">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Drag and drop files here to upload instantly to current directory</span>
+          </div>
+
+          <!-- Files Table Container -->
+          <div class="files-table-wrapper">
+            <table class="files-table">
+              <thead>
+                <tr>
+                  <th style="width: 48px;"></th>
+                  <th>Name</th>
+                  <th style="width: 120px;">Size</th>
+                  <th style="width: 110px;">Permissions</th>
+                  <th style="width: 180px;">Modified</th>
+                  <th style="width: 160px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sftpFilesBody">
+                <tr>
+                  <td colspan="6" class="loading-cell">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading directory contents...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: QUICK COMMANDS RUNNER -->
+      <section class="tab-pane" id="tab-commands">
+        <div class="commands-layout">
+          <!-- Command Presets Sidebar -->
+          <div class="commands-sidebar">
+            <div class="commands-header">
+              <h3><i class="fa-solid fa-list-check"></i> Saved Scripts</h3>
+              <button class="btn-icon" id="btnAddNewCommand" title="Add Custom Preset">
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            </div>
+            <div class="commands-list" id="quickCommandsList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Runner Console Main -->
+          <div class="commands-main">
+            <div class="custom-cmd-card">
+              <div class="cmd-input-row">
+                <div class="input-prefix"><i class="fa-solid fa-terminal"></i></div>
+                <input type="text" id="customCommandInput" placeholder="Enter remote bash command (e.g. docker ps, git status, htop)..." spellcheck="false">
+                <button class="btn-run" id="btnRunCustomCommand">
+                  <i class="fa-solid fa-play"></i> Run
+                </button>
+              </div>
+              <div class="cmd-options-row">
+                <div class="cwd-option">
+                  <span>Working Dir:</span>
+                  <input type="text" id="cmdCwdInput" placeholder="/home/ubuntu (optional)">
+                </div>
+                <div class="cmd-history-hint">
+                  <span>Press <kbd>Enter</kbd> to run</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Command Output Log -->
+            <div class="console-box">
+              <div class="console-topbar">
+                <div class="console-title">
+                  <i class="fa-solid fa-code"></i> Execution Output
+                </div>
+                <div class="console-tools">
+                  <span id="cmdExecStatus" class="badge-status ready">Ready</span>
+                  <button class="icon-btn-mini" id="btnCopyConsole" title="Copy Output"><i class="fa-regular fa-copy"></i></button>
+                  <button class="icon-btn-mini" id="btnClearConsole" title="Clear Console"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+              </div>
+              <pre class="console-output" id="cmdConsoleOutput">Ready to execute remote commands. Select a preset or type a command above.</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: SYSTEM STATS -->
+      <section class="tab-pane" id="tab-stats">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-name">Server Hostname</span>
+              <i class="fa-solid fa-server stat-icon"></i>
+            </div>
+            <div class="stat-val" id="statHostname">--</div>
+            <div class="stat-foot" id="statOs">Ubuntu Linux</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-name">System Uptime</span>
+              <i class="fa-solid fa-clock stat-icon"></i>
+            </div>
+            <div class="stat-val" id="statUptime">--</div>
+            <div class="stat-foot" id="statUsers">-- active users</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-name">CPU Usage</span>
+              <i class="fa-solid fa-microchip stat-icon"></i>
+            </div>
+            <div class="stat-val" id="statCpu">--</div>
+            <div class="stat-foot" id="statLoad">Load: --</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-name">Memory (RAM)</span>
+              <i class="fa-solid fa-memory stat-icon"></i>
+            </div>
+            <div class="stat-val" id="statRam">--</div>
+            <div class="stat-foot">Used / Total</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-name">Disk Usage (Root /)</span>
+              <i class="fa-solid fa-hard-drive stat-icon"></i>
+            </div>
+            <div class="stat-val" id="statDisk">--</div>
+            <div class="stat-foot">Used / Size</div>
+          </div>
+        </div>
+
+        <div class="stats-refresh-row">
+          <button class="btn-primary" id="btnRefreshStats">
+            <i class="fa-solid fa-rotate"></i> Refresh Metrics
+          </button>
+        </div>
+      </section>
+
+      <!-- TAB 5: CONNECTION SETTINGS -->
+      <section class="tab-pane" id="tab-settings">
+        <div class="settings-container">
+          <div class="settings-card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-network-wired"></i> VPS Connection Profile</h2>
+              <p>Configure and update your SSH connection details.</p>
+            </div>
+
+            <form id="settingsForm" class="settings-form">
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="cfgHost">Host IP Address or Domain *</label>
+                  <input type="text" id="cfgHost" placeholder="e.g. 51.79.160.129" required>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="cfgPort">SSH Port *</label>
+                  <input type="number" id="cfgPort" value="22" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="cfgUser">SSH Username *</label>
+                  <input type="text" id="cfgUser" value="ubuntu" required>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="cfgDefaultPath">Default SFTP Folder</label>
+                  <input type="text" id="cfgDefaultPath" value="/home/ubuntu">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Authentication Method</label>
+                <div class="radio-group">
+                  <label class="radio-card">
+                    <input type="radio" name="authType" value="password" checked id="authTypePass">
+                    <div class="radio-body">
+                      <i class="fa-solid fa-key"></i>
+                      <span>Password</span>
+                    </div>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="authType" value="key" id="authTypeKey">
+                    <div class="radio-body">
+                      <i class="fa-solid fa-file-shield"></i>
+                      <span>Private Key (.pem / id_rsa)</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Password Auth Group -->
+              <div class="auth-section" id="sectionPass">
+                <div class="form-group">
+                  <label for="cfgPassword">SSH Password</label>
+                  <div class="password-input-wrap">
+                    <input type="password" id="cfgPassword" placeholder="Enter password">
+                    <button type="button" class="btn-toggle-pwd" id="btnTogglePass">
+                      <i class="fa-regular fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Key Auth Group -->
+              <div class="auth-section" id="sectionKey" style="display: none;">
+                <div class="form-group">
+                  <label for="cfgKeyPath">Private Key File Path (on your laptop)</label>
+                  <input type="text" id="cfgKeyPath" placeholder="e.g. C:\Users\Keval\.ssh\id_rsa">
+                </div>
+                <div class="form-group">
+                  <label for="cfgPassphrase">Key Passphrase (if encrypted, optional)</label>
+                  <input type="password" id="cfgPassphrase" placeholder="Passphrase">
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" id="btnTestConfig">
+                  <i class="fa-solid fa-vial-circle-check"></i> Test Connection
+                </button>
+                <button type="submit" class="btn-primary" id="btnSaveConfig">
+                  <i class="fa-solid fa-floppy-disk"></i> Save & Reconnect
+                </button>
+              </div>
+
+              <div id="testResultBox" class="test-result-box" style="display: none;"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- FILE EDITOR MODAL -->
+  <div class="modal" id="editorModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-file-code"></i>
+          <span id="editorFilePath">/home/ubuntu/file.txt</span>
+        </div>
+        <button class="modal-close" id="btnCloseEditor">&times;</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="editorTextarea" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-footer">
+        <span class="file-size-info" id="editorFileInfo">Size: --</span>
+        <div class="footer-buttons">
+          <button class="btn-secondary" id="btnCancelEditor">Cancel</button>
+          <button class="btn-primary" id="btnSaveEditor">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Save to VPS
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW PRESET MODAL -->
+  <div class="modal" id="commandModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title"><i class="fa-solid fa-plus"></i> Add Quick Script Preset</div>
+        <button class="modal-close" id="btnCloseCmdModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="newCmdName">Preset Title</label>
+          <input type="text" id="newCmdName" placeholder="e.g. Restart Nginx">
+        </div>
+        <div class="form-group">
+          <label for="newCmdBody">Bash Command</label>
+          <textarea id="newCmdBody" rows="3" placeholder="e.g. sudo systemctl restart nginx"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btnCancelCmdModal">Cancel</button>
+        <button class="btn-primary" id="btnSaveNewCmd">Save Preset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
